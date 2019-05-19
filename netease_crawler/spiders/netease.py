@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-import scrapy
-from scrapy.selector import Selector
 from scrapy.linkextractors import LinkExtractor
 from scrapy.spiders import CrawlSpider, Rule
 from ..items import NewsItem
+from scrapy.loader import ItemLoader
 
 
 class NeteaseSpider(CrawlSpider):
     name = 'netease'
     allowed_domains = ['163.com']
-    start_urls = ['https://www.163.com/']
+    urls = 'https://www.163.com/'
+    start_urls = urls.split(',')
 
     rules = (
         Rule(LinkExtractor(allow=r'(\w+):\/\/([^/:]+)\/(\d{2})+\/(\d{4})+\/(\d{2})+\/([^#]*)'),
@@ -17,21 +17,23 @@ class NeteaseSpider(CrawlSpider):
     )
 
     def parse_item(self, response):
-        item = NewsItem()
-        selector = Selector(response)
-        item['title'] = selector.css('#epContentLeft>h1::text').get()
+        loader = ItemLoader(item=NewsItem(), response=response)
+        loader.add_css('title', '#epContentLeft>h1::text')
+        loader.add_css('pub_date', '#epContentLeft .post_time_source::text')
+        loader.add_css('desc', '#epContentLeft .post_desc::text')
 
-        item['pub_date'] = selector.css('#epContentLeft .post_time_source::text').get()
-        if item['pub_date'] is not None:
-            item['pub_date'] = item['pub_date'].split()[0]
+        # 游戏栏目 play.163.com
+        loader.add_css('title', 'h1.article-h1::text')
+        loader.add_css('desc', '.artical-summary::text')
 
-        item['desc'] = selector.css('#epContentLeft .post_desc::text').get()
-        if item['desc'] is not None:
-            item['desc'] = item['desc'].strip()
+        # 人间栏目 renjian.163.com
+        loader.add_css('title', '.bannertext>.daxie_sub_title::text')
+        loader.add_css('pub_date', '.sub_title>.pub_time::text')
 
-        item['body'] = selector.css('#endText::text').get()
-        if item['body'] is not None:
-            item['body'] = item['body'].strip()
+        # 体育 sports.163.com
+        loader.add_css('title', '.m-article .article-top>.article-title::text')
+        loader.add_xpath('body', '//div[@class=".article-details"]')
 
-        item['link'] = response.url
-        return item
+        loader.add_xpath('body', '//div[@id="endText"]')
+        loader.add_value('link', response.url)
+        return loader.load_item()
